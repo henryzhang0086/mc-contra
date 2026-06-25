@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>MC 魂斗罗 — 我的世界版魂斗罗</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body{ height:100%; background:#0b0f14; overflow:hidden;
+    font-family:"Segoe UI","Microsoft YaHei",monospace;
+    -webkit-user-select:none; user-select:none; touch-action:none; }
+  #wrap{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 30%, #2a1830, #060a0f 80%); }
+  canvas{ image-rendering:auto; background:#1a2a40;
+    box-shadow:0 0 0 4px #1d1d1d, 0 0 40px rgba(0,0,0,.8);
+    max-width:100vw; max-height:100vh; touch-action:none; }
+  #hint{ position:fixed; bottom:8px; left:50%; transform:translateX(-50%);
+    color:#9fb4c7; font-size:12px; letter-spacing:1px; pointer-events:none; text-shadow:0 1px 2px #000; }
+  /* 移动端虚拟按键 */
+  #touch{ position:fixed; inset:0; display:none; pointer-events:none; z-index:20; touch-action:none; }
+  .btn{ position:absolute; pointer-events:auto; width:66px; height:66px; border-radius:14px;
+    background:rgba(255,255,255,.14); border:2px solid rgba(255,255,255,.34);
+    color:#fff; font-size:26px; display:flex; align-items:center; justify-content:center;
+    backdrop-filter:blur(2px); transition:transform .05s ease, background .05s ease;
+    touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+  .btn:active{ background:rgba(120,210,255,.45); border-color:#7fd0ff; transform:scale(.92); }
+  /* 左侧方向键(十字) */
+  #bL{ left:calc(14px + env(safe-area-inset-left,0px)); bottom:calc(78px + env(safe-area-inset-bottom,0px)); }
+  #bR{ left:calc(150px + env(safe-area-inset-left,0px)); bottom:calc(78px + env(safe-area-inset-bottom,0px)); }
+  #bU{ left:calc(82px + env(safe-area-inset-left,0px)); bottom:calc(150px + env(safe-area-inset-bottom,0px)); }
+  #bD{ left:calc(82px + env(safe-area-inset-left,0px)); bottom:calc(12px + env(safe-area-inset-bottom,0px)); }
+  /* 右侧动作键 */
+  #bF{ right:calc(14px + env(safe-area-inset-right,0px)); bottom:calc(20px + env(safe-area-inset-bottom,0px)); width:84px; height:84px; font-size:30px; }
+  #bJ{ right:calc(108px + env(safe-area-inset-right,0px)); bottom:calc(78px + env(safe-area-inset-bottom,0px)); width:78px; height:78px; }
+  #bP{ top:calc(14px + env(safe-area-inset-top,0px)); right:calc(14px + env(safe-area-inset-right,0px)); width:50px; height:50px; font-size:22px; }
+  @media (pointer:coarse){ #touch{display:block;} #hint{display:none;} }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv" width="960" height="540"></canvas></div>
+<div id="hint">← → 移动 &nbsp;|&nbsp; 空格 跳跃 &nbsp;|&nbsp; ↑↓ 瞄准/卧倒 &nbsp;|&nbsp; J / 鼠标 射击(按住连发) &nbsp;|&nbsp; P / Esc 暂停 &nbsp;|&nbsp; Enter 开始</div>
+<div id="touch">
+  <div class="btn" id="bU">▲</div>
+  <div class="btn" id="bL">◀</div>
+  <div class="btn" id="bR">▶</div>
+  <div class="btn" id="bD">▼</div>
+  <div class="btn" id="bJ">⤒</div>
+  <div class="btn" id="bF">🔫</div>
+  <div class="btn" id="bP">⏸</div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
