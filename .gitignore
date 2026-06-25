@@ -3,3 +3,7 @@ tests/screenshots/
 *.log
 .DS_Store
 Thumbs.db
+
+# QR 产物(可重新生成)
+qr-code.png
+qr-code.svg
