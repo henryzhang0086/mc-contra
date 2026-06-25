@@ -1,6 +1,6 @@
 {
   "name": "mc-contra",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MC 魂斗罗 — 我的世界版魂斗罗 (HTML5 Canvas 跑射闯关, 纯前端零依赖)",
   "type": "module",
   "scripts": {
