@@ -1,0 +1,152 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<style>html,body{margin:0;background:#000;}canvas{display:block;}
+@font-face{font-family:yh;src:local("Microsoft YaHei");}</style></head>
+<body><canvas id="c" width="1080" height="1440"></canvas>
+<script>
+const X=document.getElementById('c').getContext('2d');
+const W=1080,H=1440;
+const rand=(a,b)=>a+Math.random()*(b-a);
+let SEED=1234567; function rng(){ SEED=(SEED*16807)%2147483647; return SEED/2147483647; }
+const rr=(a,b)=>a+rng()*(b-a);
+function rect(x,y,w,h,c){X.fillStyle=c;X.fillRect(x,y,w,h);}
+
+/* ---- 背景 ---- */
+const sky=X.createLinearGradient(0,0,0,H);
+sky.addColorStop(0,'#0a0a1e');sky.addColorStop(0.45,'#241038');sky.addColorStop(0.72,'#5a1530');sky.addColorStop(1,'#7a1f12');
+X.fillStyle=sky;X.fillRect(0,0,W,H);
+// 星
+for(let i=0;i<150;i++){const x=rr(0,W),y=rr(0,H*0.55),s=rr(1,3);X.fillStyle='rgba(255,255,255,'+rr(0.3,0.9)+')';X.fillRect(x,y,s,s);}
+// 月
+X.fillStyle='#f4ead0';X.beginPath();X.arc(880,210,80,0,7);X.fill();
+X.fillStyle='#0a0a1e';X.beginPath();X.arc(845,185,72,0,7);X.fill();
+// 末影龙剪影(背景大Boss)
+X.save();X.translate(540,430);X.globalAlpha=0.5;
+X.fillStyle='#120824';
+X.beginPath();X.moveTo(-30,-10);X.lineTo(-360,-160);X.lineTo(-260,70);X.closePath();X.fill();
+X.beginPath();X.moveTo(30,-10);X.lineTo(360,-160);X.lineTo(260,70);X.closePath();X.fill();
+X.fillRect(-120,-30,240,90); X.fillRect(90,-60,150,60); X.fillRect(210,-78,90,72);
+X.globalAlpha=0.9;X.fillStyle='#c46bff';X.fillRect(250,-58,26,18);X.fillRect(250,-30,26,12);
+X.restore();
+// 远山(视差)
+function ridge(base,h,col,seed){X.fillStyle=col;X.beginPath();X.moveTo(0,H);let s=seed;
+  for(let x=0;x<=W;x+=60){s=(s*9301+49297)%233280;X.lineTo(x,base-(s/233280)*h);}X.lineTo(W,H);X.closePath();X.fill();}
+ridge(1050,170,'rgba(20,40,30,.55)',7);
+ridge(1110,150,'rgba(15,28,22,.7)',31);
+
+/* ---- 地面(MC方块) ---- */
+const GY=1140, T=40;
+for(let x=0;x<W;x+=T){
+  rect(x,GY,T,12,'#5bbf4a'); rect(x,GY+12,T,T-12,'#7a5230');
+  rect(x,GY+T,T,T,'#7a5230'); rect(x,GY+T*2,T,H,'#7f7f7f');
+  for(let k=0;k<4;k++)rect(x+((k*13)%T),GY+12+((k*17)%(T*2)),3,3,'rgba(0,0,0,.18)');
+}
+// 岩浆缝
+for(let x=0;x<W;x+=T*5){rect(x+80,GY+T*2,T*2,10,'#ff7a18');rect(x+80,GY+T*2,T*2,4,'#ffd000');}
+// 暗角
+const vg=X.createRadialGradient(W/2,H*0.5,H*0.3,W/2,H*0.55,H*0.75);
+vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.55)');
+X.fillStyle=vg;X.fillRect(0,0,W,H);
+
+/* ---- 绘制元件 ---- */
+function explosion(x,y,r){
+  for(let i=0;i<26;i++){const a=rng()*7,d=rr(0.2,1)*r;const px=x+Math.cos(a)*d,py=y+Math.sin(a)*d;
+    const c=['#ffe066','#ff8a3d','#ff3b1a','#fff'][i%4];X.fillStyle=c;const s=rr(4,12);X.fillRect(px-s/2,py-s/2,s,s);}
+  X.fillStyle='rgba(255,200,80,.35)';X.beginPath();X.arc(x,y,r*0.8,0,7);X.fill();
+}
+function tracer(x,y,ang,len,col){X.save();X.translate(x,y);X.rotate(ang);
+  X.globalAlpha=0.5;X.fillStyle=col;X.fillRect(-len,-3,len,6);X.globalAlpha=1;
+  X.fillStyle=col;X.fillRect(0,-4,18,8);X.fillStyle='#fff';X.fillRect(8,-2,8,4);X.restore();}
+function creeper(x,y,s){X.save();X.translate(x,y);X.scale(s,s);
+  X.fillStyle='#7ac74f';X.fillRect(-22,-28,44,92);X.fillStyle='#0a0a0a';
+  X.fillRect(-14,-16,10,10);X.fillRect(6,-16,10,10);X.fillRect(-6,-4,12,20);X.fillRect(-12,8,8,16);X.fillRect(6,8,8,16);
+  X.fillStyle='#7ac74f';X.fillRect(-20,60,14,12);X.fillRect(8,60,14,12);X.restore();}
+function zombie(x,y,s){X.save();X.translate(x,y);X.scale(s,s);
+  rect(-18,44,16,28,'#2f5d3a');rect(2,44,16,28,'#2f5d3a');
+  rect(-20,12,40,36,'#2a7d8c');rect(-28,16,10,32,'#3aa07a');rect(18,16,10,32,'#3aa07a');
+  rect(-18,-24,36,36,'#4f8f5a');rect(-12,-12,10,8,'#0a0a0a');rect(4,-12,10,8,'#0a0a0a');X.restore();}
+// 像素士兵(开火姿态)
+function soldier(x,y,s,face,aim,col,band){X.save();X.translate(x,y);X.scale(s*face,s);
+  // 腿
+  rect(-18,44,16,30,'#39424f');rect(2,44,16,30,'#39424f');
+  // 身
+  rect(-20,12,40,36,col);rect(-20,12,40,8,band==='#b33'?'#256340':'#244a7d');
+  // 头
+  rect(-18,-24,36,36,'#caa07a');rect(-20,-26,40,12,band);
+  rect(0,-14,12,8,'#fff');rect(4,-14,6,8,'#3a6ea5');
+  // 持枪臂(指向 aim 角)
+  X.save();X.translate(0,24);X.rotate(aim);
+  rect(0,-6,30,12,'#caa07a');rect(24,-8,34,16,'#39424f');
+  // 枪口闪
+  X.fillStyle='#ffe066';X.beginPath();X.arc(62,0,18,0,7);X.fill();
+  X.fillStyle='#fff';X.beginPath();X.arc(62,0,9,0,7);X.fill();
+  X.restore();X.restore();
+  // 弹道(沿 aim, 屏幕坐标)
+  for(let i=0;i<5;i++){const a=aim*face+ (face>0?0:Math.PI)+rr(-0.28,0.28);
+    tracer(x+Math.cos(a)*70*face*(face>0?1:1),y+24+Math.sin(a)*70, a, rr(120,260), i%2?'#7ad0ff':'#ffe066');}
+}
+
+// 背景爆炸
+explosion(180,760,70);explosion(930,840,90);explosion(700,560,55);
+// 敌人
+zombie(150,1085,1.5);
+creeper(300,1075,1.45);
+zombie(980,1085,1.4);
+// 双人英雄(背靠背开火)
+soldier(470,1010,2.05,1,-0.5,'#2f7d4a','#b33');   // P1 绿 向右上
+soldier(620,1010,2.05,-1,-0.42,'#2f5a9c','#ffcf3a'); // P2 蓝 向左上
+// 前景飞弹
+for(let i=0;i<7;i++)tracer(rr(0,W),rr(620,1040),rr(-0.5,0.5),rr(120,240),i%2?'#ff6bd0':'#ffe066');
+
+/* ---- 标题 ---- */
+function title(txt,cx,cy,size,grad){
+  X.textAlign='center';X.font='900 '+size+'px yh,"Microsoft YaHei",sans-serif';
+  X.lineJoin='round';
+  X.strokeStyle='#1a0a00';X.lineWidth=size*0.22;X.strokeText(txt,cx,cy);
+  X.strokeStyle='#000';X.lineWidth=size*0.10;X.strokeText(txt,cx,cy);
+  X.fillStyle=grad;X.fillText(txt,cx,cy);
+}
+// 光晕
+X.save();X.globalAlpha=0.55;X.fillStyle='#ff7a18';X.filter='blur(40px)';
+X.font='900 220px yh';X.textAlign='center';X.fillText('魂斗罗',W/2,360);X.filter='none';X.restore();
+let tg=X.createLinearGradient(0,180,0,400);tg.addColorStop(0,'#fff3b0');tg.addColorStop(0.5,'#ffcf3a');tg.addColorStop(1,'#ff7a18');
+// 阴影偏移
+X.save();X.translate(8,10);title('MC 魂斗罗',W/2,360,210,'rgba(120,0,0,.7)');X.restore();
+title('MC 魂斗罗',W/2,360,210,tg);
+// 英文副标
+let tg2=X.createLinearGradient(0,400,0,470);tg2.addColorStop(0,'#9fe8ff');tg2.addColorStop(1,'#3a9fd0');
+title('M C   C O N T R A',W/2,452,58,tg2);
+// 中文副标
+X.fillStyle='#eaf6ff';X.font='600 34px yh';X.textAlign='center';
+X.fillText('我的世界版魂斗罗 · 8 方向跑射闯关',W/2,508);
+
+/* ---- CO-OP 徽章(斜角) ---- */
+X.save();X.translate(950,560);X.rotate(0.18);
+for(let i=0;i<12;i++){X.fillStyle=i%2?'#ff3b3b':'#ffcf3a';X.save();X.rotate(i/12*7);X.fillRect(-12,-90,24,40);X.restore();}
+X.fillStyle='#111';X.beginPath();X.arc(0,0,66,0,7);X.fill();X.fillStyle='#ffcf3a';X.beginPath();X.arc(0,0,60,0,7);X.fill();
+X.fillStyle='#7a1f12';X.font='900 30px yh';X.textAlign='center';X.fillText('双人',0,-4);X.fillText('合作',0,30);X.restore();
+
+/* ---- 特性徽章行 ---- */
+const feats=[['🎯','8 方向瞄准'],['🔫','5 种武器'],['👥','本地双人'],['🐉','3 大 Boss']];
+const fy=1235, fw=250;
+feats.forEach((f,i)=>{const fx=40+i*fw;
+  X.fillStyle='rgba(0,0,0,.45)';X.fillRect(fx,fy,fw-16,70);
+  X.strokeStyle='#ffcf3a';X.lineWidth=2;X.strokeRect(fx,fy,fw-16,70);
+  X.font='40px yh';X.textAlign='left';X.fillStyle='#fff';X.fillText(f[0],fx+16,fy+48);
+  X.font='700 26px yh';X.fillStyle='#ffe680';X.fillText(f[1],fx+70,fy+44);
+});
+
+/* ---- 底部: 扫码即玩 ---- */
+X.fillStyle='rgba(0,0,0,.6)';X.fillRect(0,1330,W,110);
+X.strokeStyle='#ff7a18';X.lineWidth=3;X.beginPath();X.moveTo(0,1330);X.lineTo(W,1330);X.stroke();
+const qr=new Image();
+qr.onload=()=>{
+  X.drawImage(qr,40,1342,86,86);
+  X.fillStyle='#fff';X.textAlign='left';X.font='800 30px yh';X.fillText('扫码即玩 · 免安装',150,1378);
+  X.fillStyle='#9fe8ff';X.font='500 24px monospace';X.fillText('henryzhang0086.github.io/mc-contra',150,1414);
+  X.fillStyle='#ffcf3a';X.textAlign='right';X.font='900 40px yh';X.fillText('▶ PLAY',W-40,1400);
+  window.__ready=true;
+};
+qr.onerror=()=>{ X.fillStyle='#fff';X.textAlign='left';X.font='800 30px yh';X.fillText('扫码即玩 · 免安装',150,1378);
+  X.fillStyle='#9fe8ff';X.font='500 24px monospace';X.fillText('henryzhang0086.github.io/mc-contra',150,1414);window.__ready=true; };
+qr.src='qr-code.png';
+</script></body></html>
