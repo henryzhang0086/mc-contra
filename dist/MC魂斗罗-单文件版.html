@@ -170,11 +170,11 @@ function pollGamepad(){
 function pdown(sc,a){ return sc[a].some(k=>keys[k]); }
 function ptapped(sc,a){ return sc[a].some(k=>press[k]); }
 
-/* ---------------- 存档 & 设置 (版本化) ---------------- */
-const STORE='mc-contra.v2';
-const SET_DEF={volume:0.7,muted:false,shake:true,difficulty:1,colorblind:false,reduceMotion:false};
+/* ---------------- 存档 & 设置 (版本化 v3: 加元进程统计) ---------------- */
+const STORE='mc-contra.v3';
+const SET_DEF={volume:0.7,muted:false,shake:true,difficulty:1,colorblind:false,reduceMotion:false,startWeapon:'normal',skin:0};
 const SETTINGS=Object.assign({},SET_DEF);
-const SAVE={ver:2,best:0};
+const SAVE={ver:3,best:0,kills:0,clears:0,runs:0};   // 累计统计驱动解锁
 // 难度: 0简单 1普通 2困难 — 影响敌人血/伤害/弹速/射频与玩家受伤
 const DIFFS=[
   {name:'简单', ehp:0.7, edmg:1, efire:1.35, espd:0.85, pdmgMul:1, life:4},
@@ -182,17 +182,70 @@ const DIFFS=[
   {name:'困难', ehp:1.4, edmg:2, efire:0.7,  espd:1.18, pdmgMul:1, life:3},
 ];
 function DIFF(){ return DIFFS[clamp(SETTINGS.difficulty|0,0,2)]; }
-function loadSave(){ try{ const r=localStorage.getItem(STORE);
-  if(r){ const d=JSON.parse(r); if(typeof d.best==='number')SAVE.best=d.best|0;
-    if(d.settings)Object.assign(SETTINGS,SET_DEF,d.settings); }
-  else { const old=localStorage.getItem('mc-contra.v1');   // 迁移旧档
-    if(old){ const o=JSON.parse(old); if(typeof o.best==='number')SAVE.best=o.best|0; if(o.settings)Object.assign(SETTINGS,SET_DEF,o.settings); } }
+function loadSave(){ try{
+    let d=JSON.parse(localStorage.getItem(STORE)||'null');
+    if(!d){ const old=localStorage.getItem('mc-contra.v2')||localStorage.getItem('mc-contra.v1'); // 迁移旧档
+      if(old)d=JSON.parse(old); }
+    if(d){ if(typeof d.best==='number')SAVE.best=d.best|0;
+      SAVE.kills=d.kills|0; SAVE.clears=d.clears|0; SAVE.runs=d.runs|0;
+      if(d.settings)Object.assign(SETTINGS,SET_DEF,d.settings); }
   }catch(e){}
-  SETTINGS.volume=clamp(+SETTINGS.volume||0,0,1); SETTINGS.difficulty=clamp(SETTINGS.difficulty|0,0,2); }
-function persist(){ try{ localStorage.setItem(STORE,JSON.stringify({ver:2,best:SAVE.best,settings:SETTINGS})); }catch(e){} }
+  SETTINGS.volume=clamp(+SETTINGS.volume||0,0,1); SETTINGS.difficulty=clamp(SETTINGS.difficulty|0,0,2);
+  SETTINGS.skin=clamp(SETTINGS.skin|0,0,99);
+}
+function persist(){ try{ localStorage.setItem(STORE,JSON.stringify(
+  {ver:3,best:SAVE.best,kills:SAVE.kills,clears:SAVE.clears,runs:SAVE.runs,settings:SETTINGS})); }catch(e){} }
 function recordScore(s){ if(s>SAVE.best){ SAVE.best=s; persist(); } }
 function effVol(){ return SETTINGS.muted?0:SETTINGS.volume; }
 function motionOK(){ return !SETTINGS.reduceMotion; }
+
+/* ---------------- 元进程 / 解锁 (M4-C) ----------------
+   累计统计(击杀/通关/最高分)驱动解锁: 角色皮肤 + 初始武器。
+   解锁状态由统计推导(非另存集合), 自洽不会丢. */
+const SKINS=[
+  {id:0, name:'士兵·绿', body:'#2f7d4a', dark:'#256340', band:'#b33',    cond:null,                 req:'初始'},
+  {id:1, name:'游侠·橙', body:'#b5602a', dark:'#8f4a1f', band:'#ffd24a', cond:s=>s.clears>=1,        req:'通关 1 次'},
+  {id:2, name:'暗影·紫', body:'#5a3a8c', dark:'#432c6b', band:'#c46bff', cond:s=>s.kills>=200,       req:'累计击杀 200'},
+  {id:3, name:'黄金·金', body:'#c9a227', dark:'#9c7d18', band:'#fff2b0', cond:s=>s.best>=8000,       req:'最高分 8000'},
+];
+const START_WEAPONS=[
+  {id:'normal',  name:'弓箭',   cond:null,            req:'初始'},
+  {id:'machine', name:'机关枪', cond:s=>s.clears>=1,  req:'通关 1 次'},
+  {id:'spread',  name:'喷射枪', cond:s=>s.kills>=120, req:'累计击杀 120'},
+  {id:'flame',   name:'烈焰弹', cond:s=>s.kills>=320, req:'累计击杀 320'},
+  {id:'laser',   name:'激光',   cond:s=>s.clears>=2,  req:'通关 2 次'},
+];
+function isUnlocked(cond){ return !cond || !!cond(SAVE); }
+function skinUnlocked(i){ return isUnlocked(SKINS[clamp(i,0,SKINS.length-1)].cond); }
+function weaponUnlocked(id){ const w=START_WEAPONS.find(w=>w.id===id); return !w||isUnlocked(w.cond); }
+function unlockedSkinIdx(){ return SKINS.filter(s=>isUnlocked(s.cond)).map(s=>s.id); }
+function unlockedWeaponIds(){ return START_WEAPONS.filter(w=>isUnlocked(w.cond)).map(w=>w.id); }
+function cycleSkin(d){ const u=unlockedSkinIdx(); let i=u.indexOf(SETTINGS.skin|0); if(i<0)i=0;
+  SETTINGS.skin=u[(i+d+u.length)%u.length]; persist(); SFX.ui(); }
+function cycleWeapon(d){ const u=unlockedWeaponIds(); let i=u.indexOf(SETTINGS.startWeapon); if(i<0)i=0;
+  SETTINGS.startWeapon=u[(i+d+u.length)%u.length]; persist(); SFX.ui(); }
+function curSkin(){ const i=clamp(SETTINGS.skin|0,0,SKINS.length-1); return skinUnlocked(i)?SKINS[i]:SKINS[0]; }
+function curStartWeapon(){ return weaponUnlocked(SETTINGS.startWeapon)?SETTINGS.startWeapon:'normal'; }
+// 当前已解锁项的标识列表(用于检测"本局新解锁")
+function unlockSnapshot(){ const a=[];
+  for(const s of SKINS)if(s.cond&&isUnlocked(s.cond))a.push('皮肤·'+s.name);
+  for(const w of START_WEAPONS)if(w.cond&&isUnlocked(w.cond))a.push('武器·'+w.name);
+  return a; }
+function endRun(cleared){
+  if(G.runEnded)return; G.runEnded=true;
+  const before=unlockSnapshot();
+  SAVE.runs=(SAVE.runs|0)+1; SAVE.kills=(SAVE.kills|0)+(G.runKills|0);
+  if(cleared)SAVE.clears=(SAVE.clears|0)+1;
+  if(G.score>SAVE.best)SAVE.best=G.score;
+  persist();
+  const after=unlockSnapshot();
+  G.newUnlocks=after.filter(x=>!before.includes(x));
+}
+// 把所选初始武器/皮肤应用到本局玩家(开新局时调用)
+function applyLoadout(){
+  const sw=curStartWeapon(); if(WEAPONS[sw])for(const p of players)p.weapon=sw;
+  const sk=curSkin(); if(players[0])players[0].col={body:sk.body,dark:sk.dark,band:sk.band,name:'P1'};
+}
 
 /* ---------------- 音频 (程序生成 SFX + 音乐) ---------------- */
 const AC=window.AudioContext||window.webkitAudioContext;
@@ -322,7 +375,8 @@ function buildLevel(def){
 const G={ state:'title', levelIndex:0, lvl:null, cam:{x:0,y:0}, camLead:0,
   shake:0, trauma:0, kickX:0, kickY:0, flash:0, flashColor:'#fff', hitstop:0,
   t:0, score:0, combo:0, comboT:0, fade:0, players:1, lives:3,
-  bossLock:false, bossLockX:0, message:'', msgT:0, paused:false, overlay:null, menuIndex:0 };
+  bossLock:false, bossLockX:0, message:'', msgT:0, paused:false, overlay:null, menuIndex:0,
+  titleSel:0, galSel:0, runKills:0, runEnded:false, newUnlocks:[] };   // M4-C 元进程
 let players=[], player, enemies, bullets, ebullets, powerups, particles, floaters, boss;
 // 存活/索敌辅助
 function alivePlayers(){ return players.filter(p=>!p.dead&&!p.out); }
@@ -480,7 +534,7 @@ function killPlayer(p){ if(p.dead)return;
   burst(p.x+p.w/2,p.y+p.h/2,'#5fd0ff',28,6); burst(p.x+p.w/2,p.y+p.h/2,'#fff',14,5); recordScore(G.score); }
 function respawnOrGameOver(p){
   if(G.lives<=0){ p.out=true;                  // 无共享命数 -> 出局
-    if(!anyActive()){ recordScore(G.score); G.state='gameover'; stopMusic(); } return; }
+    if(!anyActive()){ endRun(false); G.state='gameover'; stopMusic(); } return; }
   G.lives--;
   // 复活: 优先靠近存活队友, 否则镜头左侧安全地面
   const mate=alivePlayers()[0];
@@ -538,7 +592,7 @@ function damageEnemy(e,dmg,kdir){ e.hp-=dmg; e.flash=8; SFX.hit(panFor(e.x+e.w/2
   if(kdir&&e.type!=='turret'){ e.knock=kdir*3; }
   if(e.hp<=0){ e.dead=true; killEnemy(e); }
   else { G.hitstop=Math.max(G.hitstop,2); } }
-function killEnemy(e){ G.combo++; G.comboT=120;
+function killEnemy(e){ G.combo++; G.comboT=120; G.runKills=(G.runKills|0)+1;
   const pts=({zombie:30,skeleton:40,creeper:35,turret:60,blaze:55}[e.type]||30)+G.combo*2;
   G.score+=pts; const pan=panFor(e.x+e.w/2);
   burst(e.x+e.w/2,e.y+e.h/2,'#7ac74f',14,5); burst(e.x+e.w/2,e.y+e.h/2,'#fff',6,4);
@@ -683,8 +737,12 @@ function loadLevel(i){
 }
 function nextLevel(){
   if(G.levelIndex+1<LEVELS.length){ G.state='play'; loadLevel(G.levelIndex+1); SFX.win(); }
-  else { recordScore(G.score); G.state='clear'; stopMusic(); SFX.win(); } }
-function startGame(){ audio(); G.score=0; G.lives=DIFF().life*G.players + (G.players-1); G.state='play'; loadLevel(0); }
+  else { endRun(true); G.state='clear'; stopMusic(); SFX.win(); } }
+function startGame(){ audio(); G.score=0; G.runKills=0; G.runEnded=false; G.newUnlocks=[];
+  G.lives=DIFF().life*G.players + (G.players-1); G.state='play'; loadLevel(0); applyLoadout(); }
+// 失败后重试: 同样视为新一局(重置统计+应用装备)
+function retryRun(){ G.score=0; G.runKills=0; G.runEnded=false; G.newUnlocks=[];
+  G.lives=DIFF().life*G.players+(G.players-1); G.state='play'; loadLevel(G.levelIndex); applyLoadout(); }
 
 /* ============================================================
    绘制
@@ -939,21 +997,59 @@ function drawVignette(){
 /* ---------------- 标题/结束 ---------------- */
 function drawTitle(){ resetT();
   const g=X.createLinearGradient(0,0,0,VH);g.addColorStop(0,'#1a2a40');g.addColorStop(1,'#3a1010');X.fillStyle=g;X.fillRect(0,0,VW,VH);
-  for(let i=0;i<16;i++){ const x=(i*71+G.t*0.7)%(VW+60)-30,y=70+(i%5)*92+Math.sin(G.t*0.02+i)*18;
-    const cols=['#5bbf4a','#7a5230','#7f7f7f','#2f7d4a','#ff7a3d'];X.fillStyle=cols[i%5];X.globalAlpha=.45;X.fillRect(x,y,30,30);X.globalAlpha=1; }
+  for(let i=0;i<16;i++){ const x=(i*71+G.t*0.7)%(VW+60)-30,y=60+(i%5)*92+Math.sin(G.t*0.02+i)*18;
+    const cols=['#5bbf4a','#7a5230','#7f7f7f','#2f7d4a','#ff7a3d'];X.fillStyle=cols[i%5];X.globalAlpha=.4;X.fillRect(x,y,30,30);X.globalAlpha=1; }
   X.textAlign='center';
-  X.fillStyle='#0a0a0a';X.font='bold 70px "Microsoft YaHei"';X.fillText('MC 魂斗罗',VW/2+4,176);
-  X.fillStyle='#ffcf3a';X.fillText('MC 魂斗罗',VW/2,172);
-  X.fillStyle='#eaf6ff';X.font='20px "Microsoft YaHei"';X.fillText('—— 我的世界版魂斗罗 · 跑射闯关 ——',VW/2,214);
-  X.fillStyle='#cfe';X.font='15px "Microsoft YaHei"';
-  X.fillText('← → 移动   空格 跳跃   ↑↓ 瞄准/卧倒   J/鼠标 射击(按住连发)',VW/2,288);
-  X.fillText('武器: S 喷射 · M 机枪 · L 激光 · F 烈焰 · ❤ 回血',VW/2,316);
-  X.fillStyle='#9fd0ff';X.font='13px "Microsoft YaHei"';X.fillText('P / Esc 暂停设置',VW/2,344);
-  X.fillStyle='#ffe680';X.font='bold 17px "Microsoft YaHei"';X.fillText('◀ 难度：'+DIFFS[SETTINGS.difficulty].name+' ▶   ( ← → 切换 )',VW/2,378);
-  X.fillStyle=G.players===2?'#ffcf3a':'#9fd0ff';X.font='bold 17px "Microsoft YaHei"';
-  X.fillText((G.players===2?'👥 双人合作':'👤 单人')+'   ( Shift 切换人数 )',VW/2,406);
-  if(SAVE.best>0){ X.fillStyle='#cfe';X.font='13px "Microsoft YaHei"';X.fillText('🏆 最高分 '+SAVE.best,VW/2,430); }
-  if(Math.floor(G.t/30)%2){ X.fillStyle='#fff';X.font='bold 23px "Microsoft YaHei"';X.fillText('按 Enter 或 点击屏幕 开始',VW/2,460); }
+  X.fillStyle='#0a0a0a';X.font='bold 60px "Microsoft YaHei"';X.fillText('MC 魂斗罗',VW/2+4,138);
+  X.fillStyle='#ffcf3a';X.fillText('MC 魂斗罗',VW/2,134);
+  X.fillStyle='#eaf6ff';X.font='17px "Microsoft YaHei"';X.fillText('—— 我的世界版魂斗罗 · 跑射闯关 ——',VW/2,170);
+  X.fillStyle='#9fd0ff';X.font='12px "Microsoft YaHei"';
+  X.fillText('← → 移动  空格 跳  ↑↓ 瞄准/卧倒  J/鼠标 射击(按住连发)  P 暂停',VW/2,202);
+  // 光标菜单
+  const tg=titleGeom();
+  for(const r of tg.rows){ const sel=r.i===G.titleSel;
+    X.fillStyle=sel?'rgba(95,208,255,.26)':'rgba(0,0,0,.34)';roundRect(r.x,r.y,r.w,r.h,9);X.fill();
+    if(sel){X.strokeStyle='#5fd0ff';X.lineWidth=2;roundRect(r.x,r.y,r.w,r.h,9);X.stroke();}
+    X.fillStyle=sel?'#fff':'#cfe';X.font='bold 16px "Microsoft YaHei"';X.textAlign='left';X.fillText(r.m.label,r.x+16,r.y+23);
+    const adj=(r.m.id!=='start'&&r.m.id!=='gallery'); let val=null;
+    if(r.m.id==='difficulty')val=DIFFS[SETTINGS.difficulty].name;
+    else if(r.m.id==='players')val=G.players===2?'双人 2P':'单人 1P';
+    else if(r.m.id==='weapon')val=(START_WEAPONS.find(w=>w.id===curStartWeapon())||START_WEAPONS[0]).name;
+    else if(r.m.id==='skin')val=curSkin().name;
+    X.textAlign='right';
+    if(val!=null){ X.fillStyle='#ffe680';X.fillText((adj?'◀ ':'')+val+(adj?' ▶':''),r.x+r.w-14,r.y+23); }
+    else if(r.m.id==='gallery'){ const u=unlockSnapshot().length, tot=SKINS.length-1+START_WEAPONS.length-1;
+      X.fillStyle='#9fd0ff';X.fillText(u+'/'+tot+' 已解锁',r.x+r.w-14,r.y+23); }
+    X.textAlign='left';
+  }
+  X.textAlign='center';
+  if(SAVE.best>0||SAVE.kills>0){ X.fillStyle='#cfe';X.font='12px "Microsoft YaHei"';
+    X.fillText('🏆 最高分 '+SAVE.best+'   累计击杀 '+SAVE.kills+'   通关 '+SAVE.clears,VW/2,506); }
+  if(Math.floor(G.t/30)%2){ X.fillStyle='#fff';X.font='15px "Microsoft YaHei"';X.fillText('↑↓ 选择 · ←→ 调整 · Enter/点击 确认',VW/2,528); }
+  X.textAlign='left';
+}
+function drawGallery(){ resetT();
+  X.fillStyle='rgba(8,12,20,.97)';X.fillRect(0,0,VW,VH);
+  X.textAlign='center';X.fillStyle='#ffcf3a';X.font='bold 32px "Microsoft YaHei"';X.fillText('🔓 解锁图鉴',VW/2,58);
+  X.fillStyle='#cfe';X.font='13px "Microsoft YaHei"';
+  X.fillText('累计击杀 '+SAVE.kills+' · 通关 '+SAVE.clears+' · 最高分 '+SAVE.best,VW/2,84);
+  const colW=400,x1=VW/2-colW-12,x2=VW/2+12;
+  X.textAlign='left';
+  const col=(title,x,items,name)=>{
+    X.fillStyle='#9fd0ff';X.font='bold 17px "Microsoft YaHei"';X.fillText(title,x,120);
+    let y=136;
+    for(const it of items){ const ok=isUnlocked(it.cond);
+      X.fillStyle=ok?'rgba(60,200,120,.15)':'rgba(255,255,255,.05)';roundRect(x,y,colW,44,8);X.fill();
+      X.strokeStyle=ok?'#3df58a':'#3a4452';X.lineWidth=1.5;roundRect(x,y,colW,44,8);X.stroke();
+      X.fillStyle=ok?'#fff':'#7f8a99';X.font='bold 15px "Microsoft YaHei"';X.fillText((ok?'✓ ':'🔒 ')+name(it),x+14,y+20);
+      X.fillStyle=ok?'#bfe':'#8895a6';X.font='12px "Microsoft YaHei"';X.fillText(ok?'已解锁':('解锁：'+it.req),x+14,y+37);
+      y+=52;
+    }
+  };
+  col('角色皮肤',x1,SKINS,s=>s.name);
+  col('初始武器',x2,START_WEAPONS,w=>w.name);
+  X.textAlign='center';X.fillStyle='#fff';X.font='15px "Microsoft YaHei"';
+  if(Math.floor(G.t/30)%2)X.fillText('Enter / Esc / 点击 返回',VW/2,VH-22);
   X.textAlign='left';
 }
 function drawEnd(win){ resetT();
@@ -962,8 +1058,13 @@ function drawEnd(win){ resetT();
   X.fillText(win?'🏆 通关！要塞已清剿！':'💀 任务失败…',VW/2,VH/2-40);
   X.fillStyle='#fff';X.font='22px "Microsoft YaHei"';X.fillText('得分：'+G.score,VW/2,VH/2+8);
   const rec=G.score>0&&G.score>=SAVE.best; X.fillStyle=rec?'#ffe680':'#cfe';X.font='16px "Microsoft YaHei"';
-  X.fillText(rec?('🎉 新纪录！历史最高 '+SAVE.best):('历史最高 '+SAVE.best),VW/2,VH/2+40);
-  X.fillStyle='#cfe';X.font='16px "Microsoft YaHei"';X.fillText(win?'按 Enter / 点击 回到标题':'按 Enter / 点击 重新开始本关',VW/2,VH/2+76);
+  X.fillText(rec?('🎉 新纪录！历史最高 '+SAVE.best):('历史最高 '+SAVE.best),VW/2,VH/2+38);
+  // 本局新解锁
+  if(G.newUnlocks&&G.newUnlocks.length){
+    X.fillStyle='#7cff9a';X.font='bold 16px "Microsoft YaHei"';
+    X.fillText('🔓 新解锁：'+G.newUnlocks.join(' · '),VW/2,VH/2+66);
+  }
+  X.fillStyle='#cfe';X.font='15px "Microsoft YaHei"';X.fillText(win?'按 Enter / 点击 回到标题':'按 Enter / 点击 重新开始本关',VW/2,VH/2+96);
   X.textAlign='left';
 }
 
@@ -1048,18 +1149,53 @@ function stepPlay(){ G.t++;
   if(G.msgT>0)G.msgT--;
 }
 function uiTick(){ G.t++;
-  if(G.state==='title'){
-    if(tapped('ArrowLeft','KeyA')){ SETTINGS.difficulty=(SETTINGS.difficulty+2)%3; persist(); SFX.ui(); }
-    if(tapped('ArrowRight','KeyD')){ SETTINGS.difficulty=(SETTINGS.difficulty+1)%3; persist(); SFX.ui(); }
-    if(tapped('KeyP','ShiftLeft','ShiftRight')){ G.players=G.players===1?2:1; SFX.ui(); }   // 切换 1P/2P
-    if(tapped('Enter','NumpadEnter'))startGame();
+  if(G.state==='title')updateTitle();
+  else if(G.state==='gallery'){
+    if(tapped('Enter','NumpadEnter','Escape','KeyP')){ G.state='title'; SFX.ui(); }
+    if(pointer.justDown){ G.state='title'; SFX.ui(); }
   }
   else if(G.state==='play'&&G.paused)updateMenu();
-  else if(G.state==='gameover'){ if(tapped('Enter','NumpadEnter')){ G.score=0; G.lives=DIFF().life*G.players+(G.players-1); G.state='play'; loadLevel(G.levelIndex); } }
+  else if(G.state==='gameover'){ if(tapped('Enter','NumpadEnter'))retryRun(); }
   else if(G.state==='clear'){ if(tapped('Enter','NumpadEnter'))G.state='title'; }
+}
+/* ---- 标题光标菜单 (M4-C) ---- */
+const TITLE_ROWS=[
+  {id:'start',label:'▶ 开始游戏'},
+  {id:'difficulty',label:'难度'},
+  {id:'players',label:'人数'},
+  {id:'weapon',label:'初始武器'},
+  {id:'skin',label:'角色皮肤'},
+  {id:'gallery',label:'解锁图鉴'},
+];
+function titleGeom(){ const bw=380,rh=40,x=(VW-bw)/2,y0=250;
+  return {x,y0,bw,rh,rows:TITLE_ROWS.map((m,i)=>({m,i,x,y:y0+i*rh,w:bw,h:rh-6}))}; }
+function titleActivate(id,click){
+  if(id==='gallery'){ G.state='gallery'; G.galSel=0; SFX.ui(); }
+  else if(id==='difficulty'){ if(click){SETTINGS.difficulty=(SETTINGS.difficulty+1)%3;persist();SFX.ui();} else startGame(); }
+  else if(id==='players'){ if(click){G.players=G.players===1?2:1;SFX.ui();} else startGame(); }
+  else if(id==='weapon'){ if(click)cycleWeapon(1); else startGame(); }
+  else if(id==='skin'){ if(click)cycleSkin(1); else startGame(); }
+  else startGame();
+}
+function updateTitle(){
+  const g=titleGeom();
+  for(const r of g.rows)if(hit(r))G.titleSel=r.i;
+  if(tapped('ArrowUp','KeyW')){ G.titleSel=(G.titleSel+TITLE_ROWS.length-1)%TITLE_ROWS.length; SFX.ui(); }
+  if(tapped('ArrowDown','KeyS')){ G.titleSel=(G.titleSel+1)%TITLE_ROWS.length; SFX.ui(); }
+  const cur=TITLE_ROWS[G.titleSel], L=tapped('ArrowLeft','KeyA'), R=tapped('ArrowRight','KeyD');
+  if(cur.id==='difficulty'){ if(L){SETTINGS.difficulty=(SETTINGS.difficulty+2)%3;persist();SFX.ui();} if(R){SETTINGS.difficulty=(SETTINGS.difficulty+1)%3;persist();SFX.ui();} }
+  else if(cur.id==='players'){ if(L||R){G.players=G.players===1?2:1;SFX.ui();} }
+  else if(cur.id==='weapon'){ if(L)cycleWeapon(-1); if(R)cycleWeapon(1); }
+  else if(cur.id==='skin'){ if(L)cycleSkin(-1); if(R)cycleSkin(1); }
+  if(tapped('ShiftLeft','ShiftRight')){ G.players=G.players===1?2:1; SFX.ui(); }   // 快捷切人数
+  if(pointer.justDown){ const row=g.rows.find(r=>hit(r));
+    if(row){ G.titleSel=row.i; titleActivate(row.m.id,true); return; }
+    else { startGame(); return; } }                       // 点空白处=开始
+  if(tapped('Enter','NumpadEnter')) titleActivate(cur.id,false);
 }
 function draw(){
   if(G.state==='title')drawTitle();
+  else if(G.state==='gallery')drawGallery();
   else if(G.state==='play'){ render(); if(G.paused)drawPauseOverlay(); }
   else if(G.state==='gameover'){ render(); drawEnd(false); }
   else if(G.state==='clear')drawEnd(true);
